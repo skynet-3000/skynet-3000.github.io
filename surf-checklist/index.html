@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Surf Checklist</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Surf Checklist">
+<meta name="theme-color" content="#06283d">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root{
+    --bg:#06283d; --bg2:#0b3a57; --card:#0f4566; --ink:#eaf6fb; --muted:#8fb8cc;
+    --accent:#3fd0c9; --sand:#f4d6a0; --danger:#ff7a6b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+    -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  body{padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 96px)}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);
+    margin:calc(-1 * (env(safe-area-inset-top) + 12px)) -16px 0;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px}
+  h1{font-size:28px;font-weight:800;margin:4px 0 2px;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:14px}
+  .bar{height:8px;border-radius:8px;background:var(--bg2);margin-top:12px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--sand));transition:width .3s}
+  .done-msg{display:none;margin-top:10px;font-weight:700;color:var(--sand)}
+  .all-done .done-msg{display:block}
+  section{margin-top:20px}
+  section h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);
+    margin:0 0 8px 4px;display:flex;justify-content:space-between}
+  ul{list-style:none;margin:0;padding:0;background:var(--card);border-radius:14px;overflow:hidden}
+  li{display:flex;align-items:center;gap:12px;padding:14px;min-height:54px;
+    border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+  li:last-child{border-bottom:none}
+  .box{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--muted);
+    display:grid;place-items:center;transition:.15s}
+  li.on .box{background:var(--accent);border-color:var(--accent)}
+  li.on .box::after{content:"";width:7px;height:12px;border:solid var(--bg);border-width:0 3px 3px 0;transform:translateY(-1px) rotate(45deg)}
+  .label{flex:1;font-size:17px}
+  li.on .label{color:var(--muted);text-decoration:line-through}
+  .del{display:none;flex:none;border:none;background:var(--danger);color:#fff;border-radius:8px;
+    padding:6px 10px;font-size:14px;font-weight:600}
+  .editing .del{display:block}
+  .editing li{cursor:default}
+  .add{display:none;padding:10px 14px;gap:8px}
+  .editing .add{display:flex}
+  .add input{flex:1;font-size:16px;padding:10px;border-radius:10px;border:none;background:var(--bg2);color:var(--ink)}
+  .add button{border:none;border-radius:10px;padding:0 14px;background:var(--accent);color:var(--bg);font-weight:700;font-size:16px}
+  .dock{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;
+    padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    background:linear-gradient(transparent,var(--bg) 30%)}
+  .dock button{flex:1;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:700}
+  #reset{background:var(--sand);color:var(--bg)}
+  #edit{background:var(--bg2);color:var(--ink)}
+  .editing #edit{background:var(--accent);color:var(--bg)}
+</style>
+</head>
+<body>
+<header>
+  <div class="sub">NKBX</div>
+  <h1>Surf Checklist 🌊</h1>
+  <div class="sub" id="count"></div>
+  <div class="bar"><i id="progress"></i></div>
+  <div class="done-msg">Tout est prêt, va à l'eau ! 🤙</div>
+</header>
+<main id="list"></main>
+<div class="dock">
+  <button id="edit">Modifier</button>
+  <button id="reset">Nouvelle session</button>
+</div>
+<script>
+const KEY = "nkbx-surf-checklist-v1";
+const DEFAULT = [
+  {name:"Planche", items:["Planche","Leash","Wax / peigne à wax","Dérives + clé"]},
+  {name:"Combi", items:["Combinaison","Chaussons","Gants","Cagoule","Poncho / serviette"]},
+  {name:"Sécurité & météo", items:["Prévisions vérifiées (Surf-Forecast, Surf Report)","Horaires de marée","Crème solaire","Petite trousse de secours"]},
+  {name:"Après-surf", items:["Bidon d'eau douce pour rincer","Sac étanche pour la combi","Vêtements secs","Eau + en-cas"]},
+  {name:"Voiture", items:["Clés (cache / boîte à clés)","Sangles de toit","Téléphone chargé"]}
+];
+const uid = () => Math.random().toString(36).slice(2,9);
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.sections) return s; }catch(e){}
+  return {sections: DEFAULT.map(sec => ({id:uid(), name:sec.name,
+    items: sec.items.map(t => ({id:uid(), text:t, on:false}))}))};
+}
+let state = load();
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function render(){
+  let total = 0, done = 0;
+  $("#list").innerHTML = state.sections.map(sec => {
+    const n = sec.items.filter(i => i.on).length;
+    total += sec.items.length; done += n;
+    return `<section><h2><span>${esc(sec.name)}</span><span>${n}/${sec.items.length}</span></h2><ul>
+      ${sec.items.map(it => `<li class="${it.on?'on':''}" data-s="${sec.id}" data-i="${it.id}">
+        <span class="box"></span><span class="label">${esc(it.text)}</span>
+        <button class="del" data-del="1">Suppr.</button></li>`).join("")}
+      <li class="add" data-s="${sec.id}"><input placeholder="Ajouter…" enterkeyhint="done"><button data-add="1">+</button></li>
+    </ul></section>`;
+  }).join("");
+  $("#count").textContent = `${done} / ${total} prêts`;
+  $("#progress").style.width = total ? (done/total*100)+"%" : "0";
+  document.body.classList.toggle("all-done", total>0 && done===total);
+}
+
+function addItem(li){
+  const input = li.querySelector("input"); const text = input.value.trim();
+  if(!text) return;
+  state.sections.find(s => s.id===li.dataset.s).items.push({id:uid(), text, on:false});
+  save(); render();
+  const again = document.querySelector(`.add[data-s="${li.dataset.s}"] input`); again && again.focus();
+}
+
+$("#list").addEventListener("click", e => {
+  const li = e.target.closest("li"); if(!li) return;
+  const sec = state.sections.find(s => s.id===li.dataset.s);
+  if(e.target.dataset.add){ addItem(li); return; }
+  if(li.classList.contains("add")) return;
+  if(e.target.dataset.del){
+    sec.items = sec.items.filter(i => i.id!==li.dataset.i); save(); render(); return;
+  }
+  if(document.body.classList.contains("editing")) return;
+  const it = sec.items.find(i => i.id===li.dataset.i); it.on = !it.on;
+  if(navigator.vibrate) navigator.vibrate(10);
+  save(); render();
+});
+$("#list").addEventListener("keydown", e => {
+  if(e.key==="Enter" && e.target.tagName==="INPUT") addItem(e.target.closest("li"));
+});
+$("#edit").onclick = () => {
+  const on = document.body.classList.toggle("editing");
+  $("#edit").textContent = on ? "Terminé" : "Modifier";
+};
+$("#reset").onclick = () => {
+  if(!state.sections.some(s => s.items.some(i => i.on))) return;
+  state.sections.forEach(s => s.items.forEach(i => i.on=false)); save(); render();
+};
+render();
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+</script>
+</body>
+</html>
