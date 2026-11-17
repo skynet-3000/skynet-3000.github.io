@@ -81,16 +81,34 @@
   <button id="reset">Nouvelle session</button>
 </div>
 <script>
-const KEY = "nkbx-surf-checklist-v2";
+// ⚠️ À chaque évolution : incrémenter APP_VERSION ici ET dans version.json
+const APP_VERSION = "3";
+const KEY = "nkbx-surf-checklist";
 const DEFAULT = [
   {name:"🌊 Surf", items:["Surf","Skimboard","Combinaison","Short de bain","Lycra","Serviette de plage","Coupe-vent","Eau","Crème solaire","Casquette","Lentilles","Liquide de lentilles"]},
   {name:"🧸 Pour Jojo", items:["Combinaison","Short de bain","Lycra","Serviette de plage","Goûter","Couches x2","Lingettes","Pantalon de rechange","T-shirt de rechange","Pull","Coupe-vent"]}
 ];
 const uid = () => Math.random().toString(36).slice(2,9);
+// Construit la liste depuis DEFAULT en gardant ce que l'utilisateur a fait dans l'app :
+// cases cochées, éléments ajoutés, éléments supprimés.
+function build(prev){
+  const removed = new Set(prev ? prev.removed || [] : []);
+  const sections = DEFAULT.map(def => {
+    const old = prev && prev.sections.find(s => s.name === def.name);
+    const items = def.items.filter(t => !removed.has(def.name+"|"+t)).map(t => {
+      const o = old && old.items.find(i => i.text === t && !i.custom);
+      return {id: o ? o.id : uid(), text:t, on: o ? o.on : false};
+    });
+    if(old) old.items.filter(i => i.custom).forEach(i => items.push(i));
+    return {id: old ? old.id : uid(), name:def.name, items};
+  });
+  return {version: APP_VERSION, removed:[...removed], sections};
+}
 function load(){
-  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.sections) return s; }catch(e){}
-  return {sections: DEFAULT.map(sec => ({id:uid(), name:sec.name,
-    items: sec.items.map(t => ({id:uid(), text:t, on:false}))}))};
+  let s = null;
+  try{ s = JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  if(s && s.sections && s.version === APP_VERSION) return s;
+  return build(s && s.sections ? s : null);
 }
 let state = load();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
@@ -118,7 +136,7 @@ function render(){
 function addItem(li){
   const input = li.querySelector("input"); const text = input.value.trim();
   if(!text) return;
-  state.sections.find(s => s.id===li.dataset.s).items.push({id:uid(), text, on:false});
+  state.sections.find(s => s.id===li.dataset.s).items.push({id:uid(), text, on:false, custom:true});
   save(); render();
   const again = document.querySelector(`.add[data-s="${li.dataset.s}"] input`); again && again.focus();
 }
@@ -136,6 +154,8 @@ $("#list").addEventListener("click", e => {
   if(e.target.dataset.add){ addItem(li); return; }
   if(li.classList.contains("add")) return;
   if(e.target.dataset.del){
+    const gone = sec.items.find(i => i.id===li.dataset.i);
+    if(gone && !gone.custom){ state.removed = state.removed || []; state.removed.push(sec.name+"|"+gone.text); }
     sec.items = sec.items.filter(i => i.id!==li.dataset.i); save(); render(); return;
   }
   if(document.body.classList.contains("editing")) return;
@@ -155,7 +175,27 @@ $("#reset").onclick = () => {
   state.sections.forEach(s => s.items.forEach(i => i.on=false)); save(); render();
 };
 render();
-if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+// Mise à jour automatique : à l'ouverture et à chaque retour au premier plan,
+// on compare la version en ligne à celle chargée, et on recharge si elle a changé.
+let swReg = null;
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").then(r => swReg = r).catch(()=>{});
+}
+async function checkUpdate(){
+  if(!navigator.onLine) return;
+  try{
+    const r = await fetch("version.json?t=" + Date.now(), {cache:"no-store"});
+    const {v} = await r.json();
+    if(swReg) swReg.update().catch(()=>{});
+    // un seul rechargement par nouvelle version (évite une boucle si le CDN est en retard)
+    if(v && v !== APP_VERSION && sessionStorage.getItem("nkbx-reloaded") !== v){
+      sessionStorage.setItem("nkbx-reloaded", v); location.reload();
+    }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") checkUpdate(); });
+window.addEventListener("focus", checkUpdate);
+checkUpdate();
 </script>
 </body>
 </html>
