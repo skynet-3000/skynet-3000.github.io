@@ -1,5 +1,5 @@
 // Cache hors ligne : l'app marche à la plage sans réseau.
-const CACHE = "surf-checklist-v1";
+const CACHE = "surf-checklist-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

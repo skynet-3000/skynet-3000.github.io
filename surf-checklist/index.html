@@ -32,8 +32,15 @@
   .done-msg{display:none;margin-top:10px;font-weight:700;color:var(--sand)}
   .all-done .done-msg{display:block}
   section{margin-top:20px}
-  section h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);
-    margin:0 0 8px 4px;display:flex;justify-content:space-between}
+  section h2{font-size:17px;font-weight:700;color:var(--ink);margin:0 0 8px;padding:0 14px;
+    display:flex;align-items:center;gap:12px;cursor:pointer}
+  section h2 .t{flex:1}
+  section h2>span:last-child{color:var(--muted);font-weight:500;font-size:15px}
+  .all{display:flex;align-items:center;gap:12px;margin-top:12px;padding:0 14px;cursor:pointer;font-size:17px}
+  .all .sub{font-size:14px}
+  .box{border-radius:7px!important}
+  h2.on .box,.all.on .box{background:var(--accent);border-color:var(--accent)}
+  h2.on .box::after,.all.on .box::after{content:"";width:7px;height:12px;border:solid var(--bg);border-width:0 3px 3px 0;transform:translateY(-1px) rotate(45deg)}
   ul{list-style:none;margin:0;padding:0;background:var(--card);border-radius:14px;overflow:hidden}
   li{display:flex;align-items:center;gap:12px;padding:14px;min-height:54px;
     border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
@@ -63,11 +70,10 @@
 </head>
 <body>
 <header>
-  <div class="sub">NKBX</div>
-  <h1>Surf Checklist 🌊</h1>
-  <div class="sub" id="count"></div>
+    <h1>Surf Checklist 🌊</h1>
+  <div class="all" id="all"><span class="box"></span><span><b>Tout sélectionner</b><br><span class="sub" id="count"></span></span></div>
   <div class="bar"><i id="progress"></i></div>
-  <div class="done-msg">Tout est prêt, va à l'eau ! 🤙</div>
+  <div class="done-msg">Tout est dans le sac, go ! 🤙</div>
 </header>
 <main id="list"></main>
 <div class="dock">
@@ -75,13 +81,10 @@
   <button id="reset">Nouvelle session</button>
 </div>
 <script>
-const KEY = "nkbx-surf-checklist-v1";
+const KEY = "nkbx-surf-checklist-v2";
 const DEFAULT = [
-  {name:"Planche", items:["Planche","Leash","Wax / peigne à wax","Dérives + clé"]},
-  {name:"Combi", items:["Combinaison","Chaussons","Gants","Cagoule","Poncho / serviette"]},
-  {name:"Sécurité & météo", items:["Prévisions vérifiées (Surf-Forecast, Surf Report)","Horaires de marée","Crème solaire","Petite trousse de secours"]},
-  {name:"Après-surf", items:["Bidon d'eau douce pour rincer","Sac étanche pour la combi","Vêtements secs","Eau + en-cas"]},
-  {name:"Voiture", items:["Clés (cache / boîte à clés)","Sangles de toit","Téléphone chargé"]}
+  {name:"🌊 Surf", items:["Surf","Skimboard","Combinaison","Short de bain","Lycra","Serviette de plage","Coupe-vent","Eau","Crème solaire","Casquette","Lentilles","Liquide de lentilles"]},
+  {name:"🧸 Pour Jojo", items:["Combinaison","Short de bain","Lycra","Serviette de plage","Goûter","Couches x2","Lingettes","Pantalon de rechange","T-shirt de rechange","Pull","Coupe-vent"]}
 ];
 const uid = () => Math.random().toString(36).slice(2,9);
 function load(){
@@ -99,14 +102,15 @@ function render(){
   $("#list").innerHTML = state.sections.map(sec => {
     const n = sec.items.filter(i => i.on).length;
     total += sec.items.length; done += n;
-    return `<section><h2><span>${esc(sec.name)}</span><span>${n}/${sec.items.length}</span></h2><ul>
+    return `<section><h2 class="${sec.items.length && n===sec.items.length?'on':''}" data-sec="${sec.id}"><span class="box"></span><span class="t">${esc(sec.name)}</span><span>${n}/${sec.items.length}</span></h2><ul>
       ${sec.items.map(it => `<li class="${it.on?'on':''}" data-s="${sec.id}" data-i="${it.id}">
         <span class="box"></span><span class="label">${esc(it.text)}</span>
         <button class="del" data-del="1">Suppr.</button></li>`).join("")}
       <li class="add" data-s="${sec.id}"><input placeholder="Ajouter…" enterkeyhint="done"><button data-add="1">+</button></li>
     </ul></section>`;
   }).join("");
-  $("#count").textContent = `${done} / ${total} prêts`;
+  $("#count").textContent = `${done} / ${total} dans le sac`;
+  $("#all").classList.toggle("on", total>0 && done===total);
   $("#progress").style.width = total ? (done/total*100)+"%" : "0";
   document.body.classList.toggle("all-done", total>0 && done===total);
 }
@@ -119,7 +123,14 @@ function addItem(li){
   const again = document.querySelector(`.add[data-s="${li.dataset.s}"] input`); again && again.focus();
 }
 
+$("#all").onclick = () => {
+  const all = state.sections.every(s => s.items.every(i => i.on));
+  state.sections.forEach(s => s.items.forEach(i => i.on = !all)); save(); render();
+};
 $("#list").addEventListener("click", e => {
+  const h = e.target.closest("h2[data-sec]");
+  if(h){ const sec = state.sections.find(s => s.id===h.dataset.sec);
+    const all = sec.items.every(i => i.on); sec.items.forEach(i => i.on = !all); save(); render(); return; }
   const li = e.target.closest("li"); if(!li) return;
   const sec = state.sections.find(s => s.id===li.dataset.s);
   if(e.target.dataset.add){ addItem(li); return; }
